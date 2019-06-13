@@ -1,0 +1,105 @@
+#! /usr/bin/env ruby
+require "pg"
+require "io/console"
+
+class ExpenseData
+  def initialize
+    @connection = PG.connect(dbname: "expenses")
+  end
+
+  def display_list
+    result = @connection.exec("SELECT * FROM expenses;")
+    display_results(result)
+  end
+
+  def add_expense(amount, memo)
+    date = Date.today
+    sql = "INSERT INTO expenses (amount, memo, created_on) VALUES ($1, $2, $3);"
+    @connection.exec_params(sql, [amount, memo, date])
+  end
+
+  def search_expenses(term)
+    sql = "SELECT * FROM expenses WHERE memo ILIKE $1;"
+    result = @connection.exec_params(sql, ["%#{term}%"])
+    display_results(result)
+  end
+
+  def delete_expense(id_number)
+    sql = "SELECT * FROM expenses WHERE id = $1"
+    result = @connection.exec_params(sql, [id_number])
+    if result.values.empty?
+      puts "There is no expense with the id #{id_number}."
+    else
+      sql = "DELETE FROM expenses WHERE id = $1"
+      @connection.exec_params(sql, [id_number])
+      puts "The following expense has been deleted:"
+      display_results(result)
+    end
+  end
+
+  def delete_all_expenses
+    sql = "DELETE FROM expenses"
+    @connection.exec_params(sql)
+    puts "All expenses have been deleted."
+  end
+
+  private
+
+  def display_results(expenses)
+    expenses.each do |tuple|
+      columns = [tuple['id'].rjust(3), tuple['created_on'].rjust(10), tuple['amount'].rjust(12), tuple['memo']]
+      puts columns.join(" | ")
+    end
+  end
+end
+
+class CLI
+  def initialize
+    @app = ExpenseData.new
+  end
+
+  def run(arguments)
+    command = arguments.shift
+    case command
+    when "list"
+      @app.display_list
+    when "add"
+      amount = arguments[0]
+      memo = arguments[1]
+      puts "You must provide an amount and memo." unless amount && memo
+      @app.add_expense(amount, memo)
+    when "search"
+      term = arguments[0]
+      @app.search_expenses(term)
+    when "delete"
+      id_number = arguments[0]
+      @app.delete_expense(id_number)
+    when "clear"
+      puts "This will remove all expenses. Are you sure? (y/n)"
+      response = $stdin.getch
+      @app.delete_all_expenses if response == 'y'
+    else
+      display_help
+    end
+  end
+
+  def user_response
+
+  end
+
+  def display_help
+    puts <<~HELP
+      An expense recording system
+
+      Commands:
+
+      add AMOUNT MEMO [DATE] - record a new expense
+      clear - delete all expenses
+      list - list all expenses
+      delete NUMBER - remove expense with id NUMBER
+      search QUERY - list expenses with a matching memo field
+    HELP
+  end
+end
+
+CLI.new.run(ARGV)
