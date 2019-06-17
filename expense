@@ -5,11 +5,13 @@ require "io/console"
 class ExpenseData
   def initialize
     @connection = PG.connect(dbname: "expenses")
+    create_table
   end
 
   def display_list
     result = @connection.exec("SELECT * FROM expenses;")
-    display_results(result)
+    display_number_of_expenses(result)
+    display_results(result) if result.ntuples > 0
   end
 
   def add_expense(amount, memo)
@@ -21,7 +23,8 @@ class ExpenseData
   def search_expenses(term)
     sql = "SELECT * FROM expenses WHERE memo ILIKE $1;"
     result = @connection.exec_params(sql, ["%#{term}%"])
-    display_results(result)
+    display_number_of_expenses(result)
+    display_results(result) if result.ntuples > 0
   end
 
   def delete_expense(id_number)
@@ -45,10 +48,30 @@ class ExpenseData
 
   private
 
+  def display_number_of_expenses(expenses)
+    count = expenses.ntuples
+    puts count == 0 ? "There are no expenses." : "There are #{count} expense#{"s" if count != 1}."
+  end
+
   def display_results(expenses)
     expenses.each do |tuple|
       columns = [tuple['id'].rjust(3), tuple['created_on'].rjust(10), tuple['amount'].rjust(12), tuple['memo']]
       puts columns.join(" | ")
+    end
+    puts "-" * 50
+    total = expenses.field_values("amount").map(&:to_f).inject(:+)
+    puts "Total #{total.to_s.rjust(25)}"
+  end
+
+  def create_table
+    result = @connection.exec("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'expenses';")
+    if result[0]["count"] == "0"
+      @connection.exec("CREATE TABLE expenses (
+      	id serial PRIMARY KEY,
+      	amount decimal(6, 2) NOT NULL,
+      	memo text NOT NULL,
+      	created_on date NOT NULL
+      );")
     end
   end
 end
@@ -81,10 +104,6 @@ class CLI
     else
       display_help
     end
-  end
-
-  def user_response
-
   end
 
   def display_help

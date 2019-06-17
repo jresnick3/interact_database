@@ -1,8 +1,6 @@
 CREATE TABLE expenses (
 	id serial PRIMARY KEY,
-	amount decimal(6, 2) NOT NULL,
+	amount decimal(6, 2) NOT NULL CHECK (amount >= 0.01),
 	memo text NOT NULL,
 	created_on date NOT NULL
 );
-
-ALTER TABLE expenses ADD CHECK (amount >= 0.01);
